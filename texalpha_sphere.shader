@@ -3,13 +3,13 @@
 	Properties
 	{
 		_Color ("Color", Color) = (1,1,1,1)
-		_Tex ("Texture", 2D) = "white" {}
-		[Toggle(USE_SPHERE)] _UseSphere("Use MMDSphere?", Int) = 1
-		_SphereTex ("MMDSphere", CUBE) = "" {}
+		[NoScaleOffset] _Tex ("Texture", 2D) = "white" {}
 		_ShadeColor ("Shade Color", Color) = (0.4, 0.4, 0.4, 1)
 		_Ambient ("Shade Offset", Range (0, 1)) = 1
 		_ShadeEdge ("Shade Edge", Range (1, 10)) = 1
 		_LightDir ("Light Direction", Vector) = (0,-1,-1,1)
+		[Toggle(USE_SPHERE)] _UseSphere("Use MMDSphere?", Int) = 1
+		[NoScaleOffset] _SphereTex ("MMDSphere", CUBE) = "" {}
 		[KeywordEnum(None, Front, Back)] _Cull("Culling", Int) = 2
 	}
 	SubShader
@@ -53,7 +53,7 @@
 
 			sampler2D _Tex;
 			samplerCUBE _SphereTex;
-			
+
 			v2f vert (appdata v)
 			{
 				v2f o;
@@ -67,13 +67,13 @@
 				#endif
 				return o;
 			}
-			
-			fixed4 frag (v2f i) : SV_Target
+
+			float4 frag (v2f i) : SV_Target
 			{
 				float3 lightDir = normalize(_LightDir.xyz) * -1.0;
 				float shadow = (1.0 - dot(lightDir,i.normal)) * 0.5;
 				// sample the texture
-				fixed4 col = _Color * tex2D(_Tex, i.uv);
+				float4 col = _Color * tex2D(_Tex, i.uv);
 				shadow = clamp(_ShadeEdge * (-_Ambient + shadow), 0, _ShadeColor.a);
 				col.rgb = (1.0 - shadow) * col.rgb + shadow * _ShadeColor.rgb;
 				#if USE_SPHERE
