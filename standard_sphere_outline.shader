@@ -6,12 +6,12 @@
 		[NoScaleOffset] _Tex ("Texture", 2D) = "white" {}
 		_ShadeColor ("Shade Color", Color) = (0.4, 0.4, 0.4, 1)
 		_Ambient ("Shade Offset", Range (0, 1)) = 1
-		_ShadeEdge ("Shade Edge", Range (1, 10)) = 1
+		_ShadeEdge ("Shade Edge", Range (1, 50)) = 1
 		_LightDir ("Light Direction", Vector) = (0,-1,-1,1)
 		_OutlineColor ("Outline Color", Color) = (0, 0, 0, 1)
 		_OutlineWidth ("Outline Width", float) = 0.00000003
 		_Glow ("Glow", Range (0, 1)) = 0
-		[Toggle(USE_SPHERE)] _UseSphere("Use MMDSphere?", Int) = 0
+		[KeywordEnum(NO, ADD, MULTIPLY)] _UseSphere("Use MMDSphere?", Int) = 0
 		[NoScaleOffset] _SphereTex ("MMDSphere", Cube) = "" {}
 		[Toggle(USE_EMISSION)] _UseEmission("Use Emission?", Int) = 0
 		[NoScaleOffset] _EmissionMask ("Emission Mask", 2D) = "white" {}
@@ -31,7 +31,9 @@
 			CGPROGRAM
 			#pragma vertex vert
 			#pragma fragment frag
-			#pragma shader_feature USE_SPHERE
+			#pragma shader_feature _USESPHERE_NO
+			#pragma shader_feature _USESPHERE_ADD
+			#pragma shader_feature _USESPHERE_MULTIPLY
 			#pragma shader_feature USE_EMISSION
 			
 			#include "UnityCG.cginc"
@@ -47,9 +49,9 @@
 			{
 				float2 uv : TEXCOORD0;
 				float4 vertex : SV_POSITION;
-				float3 normal : NORMAL;
-				#if USE_SPHERE
-				float3 sphereCoord : TEXCOORD1;
+				float shadow : TEXCOORD1;
+				#if _USESPHERE_ADD || _USESPHERE_MULTIPLY
+				float3 sphereCoord : TEXCOORD2;
 				#endif
 			};
 
@@ -61,7 +63,7 @@
 			float _ShadeEdge;
 
 			sampler2D _Tex;
-			#if USE_SPHERE
+			#if _USESPHERE_ADD || _USESPHERE_MULTIPLY
 			samplerCUBE _SphereTex;
 			#endif
 			#if USE_EMISSION
@@ -74,30 +76,33 @@
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				o.uv = v.uv;
-				o.normal = UnityObjectToWorldNormal(v.normal);
-				#if USE_SPHERE
-				o.sphereCoord = reflect(float3(0,0,-1), mul((float3x3)UNITY_MATRIX_V, o.normal));
+				float3 wnormal = UnityObjectToWorldNormal(v.normal);
+				#if _USESPHERE_ADD || _USESPHERE_MULTIPLY
+				o.sphereCoord = reflect(float3(0,0,-1), mul((float3x3)UNITY_MATRIX_V, wnormal));
 				#endif
+				float3 lightDir = -normalize(_LightDir.xyz);
+				o.shadow = (1.0 - dot(lightDir, wnormal)) * 0.5;
+				o.shadow = _ShadeEdge * (-_Ambient + o.shadow);
 				return o;
 			}
 
 			float4 frag (v2f i) : SV_Target
 			{
-				float3 lightDir = normalize(_LightDir.xyz) * -1.0;
-				float shadow = (1.0 - dot(lightDir,i.normal)) * 0.5;
+				float shadow = clamp(i.shadow, 0, _ShadeColor.a);
 				// sample the texture
 				float4 col = _Color * tex2D(_Tex, i.uv);
-				shadow = clamp(_ShadeEdge * (-_Ambient + shadow), 0, _ShadeColor.a);
 				col.rgb = (1.0 - shadow) * col.rgb + shadow * _ShadeColor.rgb;
-				#if USE_SPHERE
+				#if _USESPHERE_ADD
 				col += texCUBE(_SphereTex, i.sphereCoord);
+				#elif _USESPHERE_MULTIPLY
+				col *= texCUBE(_SphereTex, i.sphereCoord);
 				#endif
 				#if USE_EMISSION
 				float4 emission = tex2D(_EmissionMask, i.uv).rgbr * _EmissionColor;
 				col.rgb += emission.rgb;
 				_Glow += emission.a;
 				#endif
-				return float4(clamp(col.rgb, 0.0, 1.0), _Glow);
+				return saturate(float4(col.rgb, _Glow));
 			}
 			ENDCG
 		}
@@ -129,7 +134,7 @@
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				float3 norm = mul((float3x3)UNITY_MATRIX_IT_MV, v.normal);
 				float2 offset = TransformViewToProjection(norm.xy);
-				o.vertex.xy += offset * _OutlineWidth * (1.0 + abs(mul(UNITY_MATRIX_MV, v.vertex).z));
+				o.vertex.xy += offset * _OutlineWidth * (1.0 - (UnityObjectToViewPos(v.vertex).z));
 				return o;
 			}
 
