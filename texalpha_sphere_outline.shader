@@ -16,6 +16,7 @@
 		[NoScaleOffset] _EmissionMask ("Emission Mask", 2D) = "white" {}
 		_EmissionColor ("Emission Color", Color) = (0,0,0,1)
 		[KeywordEnum(None, Front, Back)] _Cull("Culling", Int) = 2
+		[KeywordEnum(Zero, One)] _DstAlpha("Blooms Visibile Through", Int) = 0
 	}
 	SubShader
 	{
@@ -24,7 +25,7 @@
 
 		Pass
 		{
-			Blend SrcAlpha OneMinusSrcAlpha, Zero Zero
+			Blend SrcAlpha OneMinusSrcAlpha, Zero [_DstAlpha]
 			Cull [_Cull]
 
 			CGPROGRAM
